@@ -24,7 +24,7 @@ public class ReduxJNI {
   public static final int DRIVER_MAJOR_VERSION = 1;
 
   /** Supported driver minor version */
-  public static final int DRIVER_MINOR_VERSION = 1;
+  public static final int DRIVER_MINOR_VERSION = 2;
 
   static boolean libraryLoaded = false;
 

@@ -26,7 +26,7 @@ constexpr int DRIVER_YEAR = 2026;
 constexpr int DRIVER_MAJOR_VERSION = 1;
 
 /** Supported driver minor version */
-constexpr int DRIVER_MINOR_VERSION = 1;
+constexpr int DRIVER_MINOR_VERSION = 2;
 
 constexpr int DRIVER_NUMER = (DRIVER_YEAR << 16) | (DRIVER_MAJOR_VERSION << 8) | (DRIVER_MINOR_VERSION);
 
