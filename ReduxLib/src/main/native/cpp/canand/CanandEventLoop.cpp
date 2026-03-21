@@ -58,7 +58,6 @@ public:
     std::vector<DeviceEntry> listeners;
 
     void run() {
-        int32_t status = 0;
         fmt::print("[ReduxLib] CanandEventLoop started.\n");
         struct ReduxFIFO_Message* msgbuf = ReduxCore_AllocateBuffer(32);
         size_t messages_read = 0;
