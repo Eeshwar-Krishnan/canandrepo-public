@@ -26,6 +26,12 @@ publish.workspace = true
 name = "reduxfifo"
 crate-type = ["lib", "cdylib", "staticlib"]
 
+[profile.release]
+lto = "fat"
+
+[profile.dev]
+lto = "fat"
+
 [features]
 default = ["athena"]
 wpihal-rio = ["fifocore/wpihal-rio"]

@@ -16,7 +16,6 @@
 #include "frc/Notifier.h"
 #include "frc/Errors.h"
 #include "frc/Timer.h"
-#include "hal/Threads.h"
 #include "fmt/format.h"
 #include <atomic>
 
@@ -60,7 +59,6 @@ public:
 
     void run() {
         int32_t status = 0;
-        HAL_SetCurrentThreadPriority(true, 30, &status);
         fmt::print("[ReduxLib] CanandEventLoop started.\n");
         struct ReduxFIFO_Message* msgbuf = ReduxCore_AllocateBuffer(32);
         size_t messages_read = 0;

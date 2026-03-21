@@ -1,3 +1,8 @@
+# 2026.1.2
+
+## Bug fixes
+* [Java/C++] Don't set RT thread priority on CanandEventLoop
+
 # 2026.1.1
 
 This is the first release against WPILib 2026.1.1.

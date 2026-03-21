@@ -8,7 +8,6 @@ import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.List;
 
-import edu.wpi.first.hal.ThreadsJNI;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.Notifier;
 
@@ -218,7 +217,7 @@ public class CanandEventLoop implements Runnable {
     }
 
     public void run() {
-        ThreadsJNI.setCurrentThreadPriority(true, 30);
+        Thread.currentThread().setName("CanandEventLoop");
         System.out.println("[ReduxLib] CanandEventLoop started.");
         CanandMessage msg = new CanandMessage();
         int bufsz = 32;
