@@ -26,8 +26,8 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      S3_BUCKET: ${{ vars.REDUXLIB_DOCS_S3_BUCKET }}
-      S3_ENDPOINT: ${{ vars.REDUXLIB_DOCS_S3_ENDPOINT }}
+      S3_BUCKET: ${{ secrets.REDUXLIB_DOCS_S3_BUCKET }}
+      S3_ENDPOINT: ${{ secrets.REDUXLIB_DOCS_S3_ENDPOINT }}
       AWS_ACCESS_KEY_ID: ${{ secrets.REDUXLIB_DOCS_R2_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.REDUXLIB_DOCS_R2_SECRET_ACCESS_KEY }}
       AWS_REGION: auto
