@@ -12,29 +12,46 @@ on:
         required: true
         default: false
         type: boolean
+      commit_hash:
+        description: "Optional git commit SHA to build docs from (overrides tag checkout)"
+        required: false
+        type: string
 
 permissions:
   contents: read
 
 jobs:
   publish-docs:
-    name: Build docs and publish to S3
+    name: Build docs and publish to Cloudflare R2 (S3 API)
     runs-on: ubuntu-latest
 
     env:
-      AWS_REGION: ${{ vars.REDUXLIB_DOCS_AWS_REGION }}
       S3_BUCKET: ${{ vars.REDUXLIB_DOCS_S3_BUCKET }}
+      S3_ENDPOINT: ${{ vars.REDUXLIB_DOCS_S3_ENDPOINT }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.REDUXLIB_DOCS_R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.REDUXLIB_DOCS_R2_SECRET_ACCESS_KEY }}
+      AWS_REGION: auto
       METADATA_KEY: metav1.json
 
     steps:
-      - name: Validate tag context
+      - name: Validate tag context or commit hash
         shell: bash
         run: |
           set -euo pipefail
-          if [[ "${GITHUB_REF_TYPE}" != "tag" ]]; then
-            echo "This workflow must be run against a tag ref."
+          COMMIT_HASH="${{ github.event.inputs.commit_hash }}"
+
+          if [[ -z "${COMMIT_HASH}" && "${GITHUB_REF_TYPE}" != "tag" ]]; then
+            echo "This workflow must be run against a tag ref, unless commit_hash is provided."
             echo "Current ref type: ${GITHUB_REF_TYPE}"
             exit 1
+          fi
+
+          if [[ -n "${COMMIT_HASH}" ]]; then
+            if [[ ! "${COMMIT_HASH}" =~ ^[0-9a-fA-F]{7,40}$ ]]; then
+              echo "Invalid commit_hash input: ${COMMIT_HASH}"
+              echo "Expected a 7 to 40 character hexadecimal git SHA."
+              exit 1
+            fi
           fi
 
       - name: Validate inputs
@@ -52,6 +69,8 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.commit_hash != '' && github.event.inputs.commit_hash || github.ref }}
 
       - name: Set up Temurin JDK 17
         uses: actions/setup-java@v4
@@ -66,18 +85,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y doxygen
 
-      - name: Set up AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-region: ${{ env.AWS_REGION }}
-          role-to-assume: ${{ secrets.REDUXLIB_DOCS_AWS_ROLE_ARN }}
-
       - name: Verify required env
         shell: bash
         run: |
           set -euo pipefail
-          : "${AWS_REGION:?AWS region is required via repo variable REDUXLIB_DOCS_AWS_REGION}"
           : "${S3_BUCKET:?S3 bucket is required via repo variable REDUXLIB_DOCS_S3_BUCKET}"
+          : "${S3_ENDPOINT:?S3 endpoint is required via repo variable REDUXLIB_DOCS_S3_ENDPOINT}"
+          : "${AWS_ACCESS_KEY_ID:?R2 access key is required via secret REDUXLIB_DOCS_R2_ACCESS_KEY_ID}"
+          : "${AWS_SECRET_ACCESS_KEY:?R2 secret key is required via secret REDUXLIB_DOCS_R2_SECRET_ACCESS_KEY}"
 
       - name: Build ReduxLib Doxygen and JavaDocs
         working-directory: ReduxLib
@@ -112,7 +127,7 @@ jobs:
           echo "cpp_dir=${CPP_DIR}" >> "$GITHUB_OUTPUT"
           echo "java_dir=${JAVA_DIR}" >> "$GITHUB_OUTPUT"
 
-      - name: Upload versioned docs to S3
+      - name: Upload versioned docs to R2
         shell: bash
         run: |
           set -euo pipefail
@@ -121,8 +136,8 @@ jobs:
           CPP_DIR="${{ steps.docs.outputs.cpp_dir }}"
           JAVA_DIR="${{ steps.docs.outputs.java_dir }}"
 
-          aws s3 sync "${CPP_DIR}/" "s3://${S3_BUCKET}/${VERSION}/cpp/" --delete
-          aws s3 sync "${JAVA_DIR}/" "s3://${S3_BUCKET}/${VERSION}/java/" --delete
+          aws s3 sync "${CPP_DIR}/" "s3://${S3_BUCKET}/${VERSION}/cpp/" --delete --endpoint-url "${S3_ENDPOINT}"
+          aws s3 sync "${JAVA_DIR}/" "s3://${S3_BUCKET}/${VERSION}/java/" --delete --endpoint-url "${S3_ENDPOINT}"
 
       - name: Optionally update current alias
         if: ${{ github.event.inputs.update_current == 'true' }}
@@ -133,16 +148,16 @@ jobs:
           CPP_DIR="${{ steps.docs.outputs.cpp_dir }}"
           JAVA_DIR="${{ steps.docs.outputs.java_dir }}"
 
-          aws s3 sync "${CPP_DIR}/" "s3://${S3_BUCKET}/current/cpp/" --delete
-          aws s3 sync "${JAVA_DIR}/" "s3://${S3_BUCKET}/current/java/" --delete
+          aws s3 sync "${CPP_DIR}/" "s3://${S3_BUCKET}/current/cpp/" --delete --endpoint-url "${S3_ENDPOINT}"
+          aws s3 sync "${JAVA_DIR}/" "s3://${S3_BUCKET}/current/java/" --delete --endpoint-url "${S3_ENDPOINT}"
 
       - name: Download existing metadata
         shell: bash
         run: |
           set -euo pipefail
 
-          if aws s3api head-object --bucket "${S3_BUCKET}" --key "${METADATA_KEY}" >/dev/null 2>&1; then
-            aws s3 cp "s3://${S3_BUCKET}/${METADATA_KEY}" "./metav1.json"
+          if aws s3api head-object --bucket "${S3_BUCKET}" --key "${METADATA_KEY}" --endpoint-url "${S3_ENDPOINT}" >/dev/null 2>&1; then
+            aws s3 cp "s3://${S3_BUCKET}/${METADATA_KEY}" "./metav1.json" --endpoint-url "${S3_ENDPOINT}"
           else
             echo "[]" > ./metav1.json
           fi
@@ -151,8 +166,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
-          VERSION_WITH_SLASH="${{ github.event.inputs.version }}/"
 
           python3 - <<'PY'
           import json
@@ -178,7 +191,8 @@ jobs:
         run: |
           set -euo pipefail
           aws s3 cp "./metav1.json" "s3://${S3_BUCKET}/${METADATA_KEY}" \
-            --content-type "application/json"
+            --content-type "application/json" \
+            --endpoint-url "${S3_ENDPOINT}"
 
       - name: Summary
         shell: bash
@@ -188,8 +202,10 @@ jobs:
             echo "## ReduxLib docs publish complete"
             echo ""
             echo "- Version: \`${{ github.event.inputs.version }}\`"
+            echo "- Commit hash override: \`${{ github.event.inputs.commit_hash || 'none (using workflow ref)' }}\`"
             echo "- Updated current/: \`${{ github.event.inputs.update_current }}\`"
-            echo "- S3 bucket: \`${S3_BUCKET}\`"
+            echo "- Bucket: \`${S3_BUCKET}\`"
+            echo "- Endpoint: \`${S3_ENDPOINT}\`"
             echo "- Uploaded:"
             echo "  - \`${{ github.event.inputs.version }}/cpp/\`"
             echo "  - \`${{ github.event.inputs.version }}/java/\`"
